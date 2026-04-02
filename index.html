@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agente Ovall de Valuation — Arquitetura</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --black: #000000;
+    --dark: #0a0a0a;
+    --gray-950: #111111;
+    --gray-900: #1a1a1a;
+    --gray-850: #222222;
+    --gray-800: #2a2a2a;
+    --gray-700: #444444;
+    --gray-600: #666666;
+    --gray-500: #888888;
+    --gray-400: #aaaaaa;
+    --gray-300: #cccccc;
+    --gray-200: #e0e0e0;
+    --gray-100: #eeeeee;
+    --gray-50: #f5f5f7;
+    --white: #ffffff;
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    font-size: 16px;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+    background: var(--white);
+    color: var(--dark);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  /* ===== SMOOTH SCROLL PROGRESS ===== */
+  .scroll-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 0%;
+    height: 2px;
+    background: linear-gradient(90deg, var(--gray-400), var(--black));
+    z-index: 1000;
+    transition: width 0.1s linear;
+  }
+
+  /* ===== STICKY NAV ===== */
+  .nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 999;
+    padding: 0 40px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(255,255,255,0.72);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 0.5px solid rgba(0,0,0,0.08);
+    transform: translateY(-100%);
+    transition: transform 0.4s var(--ease-out-expo);
+  }
+  .nav.visible { transform: translateY(0); }
+  .nav .nav-logo { height: 22px; opacity: 0.8; }
+  .nav .nav-dots {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .nav .nav-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--gray-300);
+    transition: all 0.4s var(--ease-out-expo);
+    cursor: pointer;
+  }
+  .nav .nav-dot.active {
+    background: var(--black);
+    width: 20px;
+    border-radius: 3px;
+  }
+
+  /* ===== HERO ===== */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 80px 40px;
+    position: relative;
+    overflow: hidden;
+    background: var(--white);
+  }
+
+  /* Subtle grain texture */
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Radial gradient glow */
+  .hero::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 800px;
+    height: 800px;
+    background: radial-gradient(circle, rgba(0,0,0,0.03) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .hero-content {
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero-logo {
+    height: 40px;
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+    animation: heroFadeIn 1s var(--ease-out-expo) 0.2s forwards;
+    margin-bottom: 48px;
+  }
+
+  .hero-overline {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--gray-400);
+    opacity: 0;
+    transform: translateY(20px);
+    animation: heroFadeIn 1s var(--ease-out-expo) 0.4s forwards;
+    margin-bottom: 20px;
+  }
+
+  .hero-title {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: clamp(48px, 7vw, 80px);
+    font-weight: 600;
+    letter-spacing: -2px;
+    line-height: 1.05;
+    color: var(--black);
+    opacity: 0;
+    transform: translateY(30px);
+    animation: heroFadeIn 1.2s var(--ease-out-expo) 0.6s forwards;
+    margin-bottom: 28px;
+    max-width: 800px;
+  }
+
+  .hero-subtitle {
+    font-size: 19px;
+    font-weight: 300;
+    color: var(--gray-500);
+    line-height: 1.7;
+    max-width: 580px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: heroFadeIn 1s var(--ease-out-expo) 0.9s forwards;
+    margin-bottom: 48px;
+  }
+
+  .hero-legend {
+    display: flex;
+    gap: 32px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: heroFadeIn 1s var(--ease-out-expo) 1.1s forwards;
+  }
+  .hero-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--gray-500);
+  }
+  .hero-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  .hero-legend-dot.tech { background: var(--black); }
+  .hero-legend-dot.simple { background: var(--gray-400); border: 1px solid var(--gray-300); }
+
+  .hero-scroll-hint {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    animation: heroFadeIn 1s var(--ease-out-expo) 1.5s forwards;
+  }
+  .hero-scroll-hint .mouse {
+    width: 24px;
+    height: 38px;
+    border: 2px solid var(--gray-300);
+    border-radius: 12px;
+    position: relative;
+    margin: 0 auto 8px;
+  }
+  .hero-scroll-hint .mouse::after {
+    content: '';
+    width: 3px;
+    height: 8px;
+    background: var(--gray-400);
+    border-radius: 2px;
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    animation: scrollDot 2s ease-in-out infinite;
+  }
+  .hero-scroll-hint span {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gray-400);
+  }
+
+  @keyframes heroFadeIn {
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes scrollDot {
+    0%, 100% { opacity: 1; top: 6px; }
+    50% { opacity: 0.3; top: 18px; }
+  }
+
+  /* ===== SECTION SHARED ===== */
+  .section {
+    padding: 120px 40px;
+    max-width: 1200px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  /* ===== STEP CARDS ===== */
+  .step {
+    opacity: 0;
+    transform: translateY(60px);
+    transition: all 0.9s var(--ease-out-expo);
+    margin-bottom: 24px;
+  }
+  .step.in-view {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .step-connector {
+    display: flex;
+    justify-content: center;
+    padding: 8px 0;
+    opacity: 0;
+    transition: opacity 0.6s ease 0.3s;
+  }
+  .step.in-view + .step-connector,
+  .step.in-view ~ .step-connector {
+    opacity: 1;
+  }
+  .connector-line {
+    width: 1px;
+    height: 48px;
+    background: linear-gradient(to bottom, var(--gray-200), var(--gray-300));
+    position: relative;
+  }
+  .connector-line::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 8px;
+    height: 8px;
+    border-right: 1.5px solid var(--gray-300);
+    border-bottom: 1.5px solid var(--gray-300);
+    transform: translateX(-50%) rotate(45deg);
+  }
+
+  .step-card {
+    background: var(--white);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 0.5px rgba(0,0,0,0.03),
+      0 2px 4px rgba(0,0,0,0.02),
+      0 12px 32px rgba(0,0,0,0.04);
+    transition: all 0.5s var(--ease-out-expo);
+  }
+  .step-card:hover {
+    box-shadow:
+      0 0 0 0.5px rgba(0,0,0,0.05),
+      0 4px 8px rgba(0,0,0,0.03),
+      0 24px 64px rgba(0,0,0,0.08);
+    transform: translateY(-2px);
+  }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 32px 36px 28px;
+  }
+
+  .step-number {
+    width: 56px;
+    height: 56px;
+    min-width: 56px;
+    background: var(--black);
+    color: var(--white);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Playfair Display', serif;
+    font-size: 24px;
+    font-weight: 600;
+    transition: all 0.4s var(--ease-out-expo);
+  }
+  .step-card:hover .step-number {
+    border-radius: 20px;
+    transform: scale(1.05);
+  }
+
+  .step-titles { flex: 1; }
+  .step-titles h2 {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 26px;
+    font-weight: 600;
+    color: var(--black);
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+  }
+  .step-titles .tech-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-400);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .step-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gray-100), transparent);
+    margin: 0 36px;
+  }
+
+  .step-body {
+    padding: 32px 36px 36px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: start;
+  }
+  .step-body.single-col {
+    grid-template-columns: 1fr;
+  }
+
+  /* Explanation side */
+  .explanation { display: flex; flex-direction: column; gap: 20px; }
+
+  .simple-text {
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--gray-700);
+    line-height: 1.6;
+    font-style: italic;
+    padding-left: 20px;
+    border-left: 2px solid var(--gray-200);
+    position: relative;
+  }
+  .simple-text::before {
+    content: '"';
+    position: absolute;
+    left: -4px;
+    top: -8px;
+    font-family: 'Playfair Display', serif;
+    font-size: 40px;
+    color: var(--gray-200);
+    line-height: 1;
+  }
+
+  .qa-grid { display: flex; flex-direction: column; gap: 16px; }
+  .qa-item { display: flex; gap: 16px; align-items: flex-start; }
+  .qa-label {
+    min-width: 110px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--gray-400);
+    padding-top: 3px;
+  }
+  .qa-text {
+    font-size: 14px;
+    color: var(--gray-600);
+    line-height: 1.7;
+  }
+
+  /* Components side */
+  .components {
+    display: grid;
+    gap: 12px;
+  }
+  .components.cols-2 { grid-template-columns: 1fr 1fr; }
+  .components.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .components.cols-5 { grid-template-columns: repeat(5, 1fr); }
+
+  .component {
+    background: var(--gray-50);
+    border: 1px solid rgba(0,0,0,0.04);
+    border-radius: 16px;
+    padding: 24px 18px;
+    text-align: center;
+    transition: all 0.4s var(--ease-out-expo);
+    cursor: default;
+    position: relative;
+    overflow: hidden;
+  }
+  .component::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 0%, rgba(0,0,0,0.02), transparent 70%);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+  .component:hover::before { opacity: 1; }
+  .component:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+    border-color: rgba(0,0,0,0.08);
+  }
+  .component .icon {
+    font-size: 28px;
+    margin-bottom: 12px;
+    display: block;
+    filter: grayscale(100%);
+    opacity: 0.6;
+    transition: all 0.3s ease;
+  }
+  .component:hover .icon { opacity: 0.9; transform: scale(1.1); }
+  .component .comp-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--gray-800);
+    margin-bottom: 6px;
+    letter-spacing: -0.2px;
+  }
+  .component .comp-detail {
+    font-size: 11px;
+    color: var(--gray-500);
+    line-height: 1.5;
+  }
+
+  /* Element tags for sub-agents */
+  .element-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: var(--black);
+    color: var(--white);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    font-family: 'Inter', monospace;
+    transition: all 0.4s var(--ease-out-expo);
+    position: relative;
+  }
+  .component:hover .element-tag {
+    transform: scale(1.15) rotate(-3deg);
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+
+  /* ===== ORCHESTRATOR (DARK SECTION) ===== */
+  .dark-section {
+    background: var(--black);
+    padding: 1px 0;
+    margin: 60px 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .dark-section::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 50%, rgba(40,40,40,0.5) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 50%, rgba(30,30,30,0.4) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  /* Subtle grid pattern */
+  .dark-section::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+  }
+
+  .dark-section .section { position: relative; z-index: 1; }
+
+  .dark-section .step-card {
+    background: rgba(255,255,255,0.04);
+    border-color: rgba(255,255,255,0.08);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow:
+      0 0 0 0.5px rgba(255,255,255,0.05),
+      0 2px 4px rgba(0,0,0,0.2),
+      0 12px 32px rgba(0,0,0,0.3);
+  }
+  .dark-section .step-card:hover {
+    background: rgba(255,255,255,0.06);
+    box-shadow:
+      0 0 0 0.5px rgba(255,255,255,0.08),
+      0 4px 8px rgba(0,0,0,0.3),
+      0 24px 64px rgba(0,0,0,0.4);
+  }
+  .dark-section .step-number {
+    background: var(--white);
+    color: var(--black);
+  }
+  .dark-section .step-titles h2 { color: var(--white); }
+  .dark-section .step-titles .tech-label { color: var(--gray-500); }
+  .dark-section .step-divider {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+  }
+  .dark-section .simple-text {
+    color: var(--gray-400);
+    border-left-color: var(--gray-700);
+  }
+  .dark-section .simple-text::before { color: var(--gray-700); }
+  .dark-section .qa-label { color: var(--gray-500); }
+  .dark-section .qa-text { color: var(--gray-400); }
+  .dark-section .component {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.08);
+  }
+  .dark-section .component:hover {
+    background: rgba(255,255,255,0.08);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+  .dark-section .component .comp-name { color: var(--white); }
+  .dark-section .component .comp-detail { color: var(--gray-500); }
+  .dark-section .component .icon { filter: grayscale(100%) invert(1); }
+  .dark-section .connector-line {
+    background: linear-gradient(to bottom, rgba(255,255,255,0.1), rgba(255,255,255,0.2));
+  }
+  .dark-section .connector-line::after {
+    border-color: rgba(255,255,255,0.2);
+  }
+
+  /* ===== VALIDATION SECTION ===== */
+  .validation-section {
+    background: var(--gray-50);
+    padding: 1px 0;
+    margin: 60px 0;
+    border-top: 1px solid var(--gray-100);
+    border-bottom: 1px solid var(--gray-100);
+  }
+
+  .validation-card {
+    border: 2px solid var(--black) !important;
+  }
+
+  .validation-pipeline {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    justify-content: center;
+    margin-top: 8px;
+  }
+  .validation-step {
+    flex: 1;
+    max-width: 300px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: 16px;
+    padding: 28px 20px;
+    text-align: center;
+    transition: all 0.4s var(--ease-out-expo);
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  .step.in-view .validation-step {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .step.in-view .validation-step:nth-child(1) { transition-delay: 0.1s; }
+  .step.in-view .validation-step:nth-child(3) { transition-delay: 0.3s; }
+  .step.in-view .validation-step:nth-child(5) { transition-delay: 0.5s; }
+
+  .validation-step:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.08);
+  }
+  .check-number {
+    width: 36px;
+    height: 36px;
+    background: var(--black);
+    color: var(--white);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 auto 14px;
+  }
+  .v-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--gray-800);
+    margin-bottom: 6px;
+  }
+  .v-tech {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--gray-400);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .v-desc {
+    font-size: 12px;
+    color: var(--gray-500);
+    line-height: 1.6;
+  }
+  .validation-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    color: var(--gray-300);
+    font-size: 20px;
+    opacity: 0;
+    transition: opacity 0.5s ease 0.4s;
+  }
+  .step.in-view .validation-arrow { opacity: 1; }
+
+  /* ===== STAGGERED COMPONENTS ===== */
+  .step.in-view .component {
+    opacity: 0;
+    animation: componentIn 0.6s var(--ease-out-expo) forwards;
+  }
+  .step.in-view .component:nth-child(1) { animation-delay: 0.15s; }
+  .step.in-view .component:nth-child(2) { animation-delay: 0.25s; }
+  .step.in-view .component:nth-child(3) { animation-delay: 0.35s; }
+  .step.in-view .component:nth-child(4) { animation-delay: 0.45s; }
+  .step.in-view .component:nth-child(5) { animation-delay: 0.55s; }
+
+  @keyframes componentIn {
+    from { opacity: 0; transform: translateY(16px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* ===== DRAWING GUIDE ===== */
+  .guide-section {
+    background: var(--gray-50);
+    padding: 1px 0;
+    border-top: 1px solid var(--gray-100);
+  }
+  .guide-section .section { padding-top: 80px; padding-bottom: 80px; }
+
+  .section-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 36px;
+    font-weight: 600;
+    color: var(--black);
+    text-align: center;
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+  .section-subtitle {
+    font-size: 16px;
+    color: var(--gray-500);
+    text-align: center;
+    margin-bottom: 48px;
+    font-weight: 300;
+  }
+
+  .guide-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+  }
+  .guide-card {
+    background: var(--white);
+    border: 1px solid rgba(0,0,0,0.04);
+    border-radius: 20px;
+    padding: 28px 24px;
+    transition: all 0.4s var(--ease-out-expo);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+  }
+  .guide-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.06);
+  }
+  .guide-card h3 {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--black);
+    margin-bottom: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .guide-card p {
+    font-size: 14px;
+    color: var(--gray-600);
+    line-height: 1.7;
+  }
+
+  /* ===== SIMPLIFIED VERSION ===== */
+  .simplified-section {
+    padding: 1px 0;
+    border-top: 1px solid var(--gray-100);
+  }
+  .simplified-section .section { padding-top: 80px; padding-bottom: 80px; }
+
+  .sketch-flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .sketch-box {
+    width: 100%;
+    border: 2px solid var(--gray-800);
+    border-radius: 20px;
+    padding: 24px 28px;
+    background: var(--white);
+    position: relative;
+    transition: all 0.4s var(--ease-out-expo);
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  .sketch-box.in-view {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .sketch-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+  }
+  .sketch-box.dark {
+    background: var(--black);
+    border-color: var(--black);
+    color: var(--white);
+  }
+  .sketch-box.dark:hover {
+    box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+  }
+  .sketch-box.dark .sketch-label { color: var(--gray-500); }
+  .sketch-box.dark .sketch-title { color: var(--white); }
+  .sketch-box.dark .sketch-desc { color: var(--gray-400); }
+  .sketch-box.emphasis {
+    border-width: 3px;
+  }
+
+  .sketch-num {
+    position: absolute;
+    top: -12px;
+    left: 24px;
+    background: var(--black);
+    color: var(--white);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 14px;
+    border-radius: 20px;
+    letter-spacing: 1px;
+  }
+  .sketch-box.dark .sketch-num {
+    background: var(--white);
+    color: var(--black);
+  }
+  .sketch-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--gray-400);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .sketch-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--black);
+    margin-bottom: 4px;
+  }
+  .sketch-desc {
+    font-size: 13px;
+    color: var(--gray-600);
+    line-height: 1.5;
+  }
+  .sketch-arrow {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sketch-arrow .line {
+    width: 1px;
+    height: 100%;
+    background: var(--gray-300);
+  }
+  .sketch-split {
+    display: flex;
+    gap: 16px;
+    width: 100%;
+  }
+  .sketch-split .sketch-box { flex: 1; }
+
+  /* ===== FOOTER ===== */
+  .footer {
+    text-align: center;
+    padding: 80px 40px 60px;
+    position: relative;
+  }
+  .footer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gray-200), transparent);
+  }
+  .footer-logo {
+    height: 36px;
+    opacity: 0.5;
+    margin-bottom: 20px;
+    transition: opacity 0.4s ease;
+  }
+  .footer:hover .footer-logo { opacity: 0.8; }
+  .footer .tagline {
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    font-style: italic;
+    color: var(--gray-400);
+    letter-spacing: 0.5px;
+  }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width: 768px) {
+    .step-body { grid-template-columns: 1fr; gap: 24px; }
+    .components.cols-5 { grid-template-columns: repeat(3, 1fr); }
+    .guide-grid { grid-template-columns: 1fr; }
+    .validation-pipeline { flex-direction: column; align-items: center; }
+    .validation-arrow { transform: rotate(90deg); min-height: 30px; }
+    .hero-title { font-size: 40px; letter-spacing: -1px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Scroll Progress -->
+<div class="scroll-progress" id="scrollProgress"></div>
+
+<!-- Sticky Nav -->
+<nav class="nav" id="stickyNav">
+  <img src="logo.png" alt="Ovall" class="nav-logo">
+  <div class="nav-dots">
+    <div class="nav-dot" data-step="1" onclick="scrollToStep(0)"></div>
+    <div class="nav-dot" data-step="2" onclick="scrollToStep(1)"></div>
+    <div class="nav-dot" data-step="3" onclick="scrollToStep(2)"></div>
+    <div class="nav-dot" data-step="4" onclick="scrollToStep(3)"></div>
+    <div class="nav-dot" data-step="5" onclick="scrollToStep(4)"></div>
+    <div class="nav-dot" data-step="6" onclick="scrollToStep(5)"></div>
+    <div class="nav-dot" data-step="7" onclick="scrollToStep(6)"></div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-content">
+    <img src="logo.png" alt="Ovall" class="hero-logo">
+    <div class="hero-overline">Arquitetura de Agente</div>
+    <h1 class="hero-title">Agente de Valuation</h1>
+    <p class="hero-subtitle">Inteligência artificial com precisão institucional, tripla validação e zero margem para erro matemático</p>
+    <div class="hero-legend">
+      <div class="hero-legend-item">
+        <div class="hero-legend-dot tech"></div>
+        Linguagem Técnica
+      </div>
+      <div class="hero-legend-item">
+        <div class="hero-legend-dot simple"></div>
+        Linguagem Simples
+      </div>
+    </div>
+  </div>
+  <div class="hero-scroll-hint">
+    <div class="mouse"></div>
+    <span>Scroll</span>
+  </div>
+</section>
+
+<!-- STEP 1 — ENTRADA -->
+<div class="section">
+  <div class="step" data-step="1">
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-number">1</div>
+        <div class="step-titles">
+          <h2>Entrada</h2>
+          <span class="tech-label">Input Layer — User Request + Structured Briefing</span>
+        </div>
+      </div>
+      <div class="step-divider"></div>
+      <div class="step-body">
+        <div class="explanation">
+          <div class="simple-text">Tudo começa aqui: você pede a análise de um imóvel e o agente organiza as informações</div>
+          <div class="qa-grid">
+            <div class="qa-item">
+              <span class="qa-label">O que é</span>
+              <span class="qa-text">O ponto de partida. O usuário informa o endereço, tipo do ativo, área e finalidade da análise.</span>
+            </div>
+            <div class="qa-item">
+              <span class="qa-label">Como funciona</span>
+              <span class="qa-text">O agente recebe a solicitação em linguagem natural e estrutura automaticamente um briefing padronizado com todos os campos necessários.</span>
+            </div>
+            <div class="qa-item">
+              <span class="qa-label">Por que existe</span>
+              <span class="qa-text">Sem um briefing estruturado, o agente não sabe o que buscar. A padronização garante que nenhuma informação crítica seja esquecida.</span>
+            </div>
+          </div>
+        </div>
+        <div class="components cols-2">
+          <div class="component">
+            <span class="icon">&#9998;</span>
+            <div class="comp-name">Solicitação</div>
+            <div class="comp-detail">Usuário pede o valuation em linguagem natural</div>
+          </div>
+          <div class="component">
+            <span class="icon">&#9776;</span>
+            <div class="comp-name">Briefing Estruturado</div>
+            <div class="comp-detail">Endereço, tipo, área (m²), finalidade, contexto</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="step-connector"><div class="connector-line"></div></div>
+
+  <!-- STEP 2 — RAG -->
+  <div class="step" data-step="2">
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-number">2</div>
+        <div class="step-titles">
+          <h2>Base de Conhecimento</h2>
+          <span class="tech-label">RAG — Retrieval Augmented Generation / Vector Database</span>
+        </div>
+      </div>
+      <div class="step-divider"></div>
+      <div class="step-body">
+        <div class="explanation">
+          <div class="simple-text">A memória do agente: tudo que ele já aprendeu e guardou sobre imóveis, leis e mercado</div>
+          <div class="qa-grid">
+            <div class="qa-item">
+              <span class="qa-label">O que é</span>
+              <span class="qa-text">Um banco de dados inteligente que armazena documentos, transações históricas, legislação urbanística e premissas macroeconômicas em formato vetorial.</span>
+            </div>
+            <div class="qa-item">
+              <span class="qa-label">Como funciona</span>
+              <span class="qa-text">Quando o agente recebe uma pergunta, ele busca nos documentos mais relevantes usando similaridade semântica — como um Google interno ultra-preciso que entende contexto, não apenas palavras-chave.</span>
+            </div>
+            <div class="qa-item">
+              <span class="qa-label">Por que existe</span>
+              <span class="qa-text">O LLM sozinho "inventa" dados (alucinação). O RAG obriga o agente a usar apenas informações reais, validadas e rastreáveis. É a diferença entre chutar e saber.</span>
+            </div>
+          </div>
+        </div>
+        <div class="components cols-2">
+          <div class="component">
+            <span class="icon">&#128196;</span>
+            <div class="comp-name">Documentos</div>
+            <div class="comp-detail">Matrículas, contratos, laudos, escrituras, certidões</div>
+          </div>
+          <div class="component">
+            <span class="icon">&#128200;</span>
+            <div class="comp-name">Dados de Mercado</div>
+            <div class="comp-detail">Transações reais, comparáveis validados, histórico de preços</div>
+          </div>
+          <div class="component">
+            <span class="icon">&#9878;</span>
+            <div class="comp-name">Legislação</div>
+            <div class="comp-detail">Zoneamento, Plano Diretor, Código de Obras, LUOS</div>
+          </div>
+          <div class="component">
+            <span class="icon">&#128176;</span>
+            <div class="comp-name">Premissas Macro</div>
+            <div class="comp-detail">Selic, CDI, IPCA, Cap Rates por classe de ativo</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="step-connector"><div class="connector-line"></div></div>
+
+  <!-- STEP 3 — REAL TIME -->
+  <div class="step" data-step="3">
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-number">3</div>
+        <div class="step-titles">
+          <h2>Busca em Tempo Real</h2>
+          <span class="tech-label">Real-Time Data Ingestion — APIs + Web Scraping + Live Feeds</span>
+        </div>
+      </div>
+      <div class="step-divider"></div>
+      <div class="step-body">
+        <div class="explanation">
+          <div class="simple-text">Os olhos do agente: ele busca dados frescos na internet agora, neste momento</div>
+          <div class="qa-grid">
+            <div class="qa-item">
+              <span class="qa-label">O que é</span>
+              <span class="qa-text">Conexões ao vivo com fontes externas de dados — APIs governamentais, portais imobiliários e relatórios de consultorias internacionais.</span>
+            </div>
+            <div class="qa-item">
+              <span class="qa-label">Como funciona</span>
+              <span class="qa-text">O agente consulta em tempo real o Banco Central (Selic, câmbio), IBGE (IPCA, índices), portais como ZAP e VivaReal (ofertas ativas), e relatórios da Cushman Wakefield, JLL e CBRE (cap rates, vacância).</span>
+            </div>
+            <div class="qa-item">
+              <span class="qa-label">Por que existe</span>
+              <span class="qa-text">Dados de mercado mudam todo dia. O RAG tem o histórico e a base, mas o agente precisa do "hoje" para que o valuation reflita a realidade atual.</span>
+            </div>
+          </div>
+        </div>
+        <div class="components cols-3">
+          <div class="component">
+            <span class="icon">&#127760;</span>
+            <div class="comp-name">APIs Públicas</div>
+            <div class="comp-detail">BCB, IBGE, B3, CVM, Prefeituras</div>
+          </div>
+          <div class="component">
+            <span class="icon">&#127968;</span>
+            <div class="comp-name">Portais Imobiliários</div>
+            <div class="comp-detail">ZAP, VivaReal, QuintoAndar, OLX</div>
+          </div>
+          <div class="component">
+            <span class="icon">&#128209;</span>
+            <div class="comp-name">Relatórios Setoriais</div>
+            <div class="comp-detail">Cushman, JLL, CBRE, Secovi, Abrainc</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 4 — ORCHESTRATOR (DARK) -->
+<div class="dark-section">
+  <div class="section">
+    <div class="step-connector"><div class="connector-line"></div></div>
+    <div class="step" data-step="4">
+      <div class="step-card">
+        <div class="step-header">
+          <div class="step-number">4</div>
+          <div class="step-titles">
+            <h2>Orquestrador</h2>
+            <span class="tech-label">Orchestration Layer — LLM + Deterministic Math Engine + Task Planner</span>
+          </div>
+        </div>
+        <div class="step-divider"></div>
+        <div class="step-body">
+          <div class="explanation">
+            <div class="simple-text">O maestro: decide o que fazer, em que ordem, e com qual ferramenta — sem nunca errar a conta</div>
+            <div class="qa-grid">
+              <div class="qa-item">
+                <span class="qa-label">O que é</span>
+                <span class="qa-text">O cérebro central que coordena todo o processo de valuation, combinando raciocínio de IA com cálculo matemático determinístico.</span>
+              </div>
+              <div class="qa-item">
+                <span class="qa-label">Como funciona</span>
+                <span class="qa-text">O LLM (GPT-4.1 ou Gemini 2.5) raciocina e toma decisões. O Motor Matemático (Python Decimal com 28 dígitos de precisão) calcula sem margem de erro. O Planejador decompõe a tarefa em sub-tarefas e aciona os agentes especializados.</span>
+              </div>
+              <div class="qa-item">
+                <span class="qa-label">Por que existe</span>
+                <span class="qa-text">Um LLM sozinho erra matemática — é um fato. Separar o raciocínio (IA) do cálculo (código determinístico) elimina 100% das alucinações numéricas. É como ter um CEO que pensa e um CFO que calcula.</span>
+              </div>
+            </div>
+          </div>
+          <div class="components cols-3">
+            <div class="component">
+              <span class="icon">&#129504;</span>
+              <div class="comp-name">LLM Principal</div>
+              <div class="comp-detail">GPT-4.1 / Gemini 2.5<br>Raciocínio + Decisão</div>
+            </div>
+            <div class="component">
+              <span class="icon">&#128290;</span>
+              <div class="comp-name">Motor Matemático</div>
+              <div class="comp-detail">Python Decimal<br>28 dígitos de precisão</div>
+            </div>
+            <div class="component">
+              <span class="icon">&#128736;</span>
+              <div class="comp-name">Planejador</div>
+              <div class="comp-detail">Decompõe tarefa<br>Aciona sub-agentes</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="step-connector"><div class="connector-line"></div></div>
+
+    <!-- STEP 5 — SUB-AGENTS -->
+    <div class="step" data-step="5">
+      <div class="step-card">
+        <div class="step-header">
+          <div class="step-number">5</div>
+          <div class="step-titles">
+            <h2>Sub-Agentes Especializados</h2>
+            <span class="tech-label">Specialized Agent Swarm — Domain-Specific Micro-Agents</span>
+          </div>
+        </div>
+        <div class="step-divider"></div>
+        <div class="step-body">
+          <div class="explanation">
+            <div class="simple-text">A equipe de especialistas: cada um é expert em uma coisa, como um escritório com 5 diretores</div>
+            <div class="qa-grid">
+              <div class="qa-item">
+                <span class="qa-label">O que é</span>
+                <span class="qa-text">Cinco agentes menores e independentes, cada um especializado em uma área do valuation. Nomeados com elementos da Tabela Periódica — identidade Ovall.</span>
+              </div>
+              <div class="qa-item">
+                <span class="qa-label">Como funciona</span>
+                <span class="qa-text">O Orquestrador delega tarefas específicas. Cada agente tem seu próprio prompt de sistema (persona de especialista), ferramentas dedicadas e acesso à base de dados relevante. Trabalham em paralelo quando possível.</span>
+              </div>
+              <div class="qa-item">
+                <span class="qa-label">Por que existe</span>
+                <span class="qa-text">Um generalista erra detalhes. Um agente que tenta fazer tudo ao mesmo tempo perde profundidade. Especialistas garantem qualidade "nível PhD" em cada área — a mesma lógica de um escritório com sócios especializados.</span>
+              </div>
+            </div>
+          </div>
+          <div class="components cols-5">
+            <div class="component">
+              <span class="element-tag">H</span>
+              <div class="comp-name">Documental</div>
+              <div class="comp-detail">Hidrogênio<br>Extrai e valida dados de matrículas</div>
+            </div>
+            <div class="component">
+              <span class="element-tag">Fe</span>
+              <div class="comp-name">Urbanístico</div>
+              <div class="comp-detail">Ferro<br>Valida zoneamento, CA, TO</div>
+            </div>
+            <div class="component">
+              <span class="element-tag">Au</span>
+              <div class="comp-name">Financeiro</div>
+              <div class="comp-detail">Ouro<br>NOI, Cap Rate, TIR, VPL</div>
+            </div>
+            <div class="component">
+              <span class="element-tag">C</span>
+              <div class="comp-name">Comparáveis</div>
+              <div class="comp-detail">Carbono<br>Seleciona amostra por área (m²)</div>
+            </div>
+            <div class="component">
+              <span class="element-tag">Pb</span>
+              <div class="comp-name">Risco</div>
+              <div class="comp-detail">Chumbo<br>Cenários de estresse</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 6 — TRIPLE VALIDATION -->
+<div class="validation-section">
+  <div class="section">
+    <div class="step-connector"><div class="connector-line"></div></div>
+    <div class="step" data-step="6">
+      <div class="step-card validation-card">
+        <div class="step-header">
+          <div class="step-number">6</div>
+          <div class="step-titles">
+            <h2>Tripla Validação</h2>
+            <span class="tech-label">Triple Validation Pipeline — Deterministic + AI Audit + Cross-Reconciliation</span>
+          </div>
+        </div>
+        <div class="step-divider"></div>
+        <div class="step-body single-col">
+          <div class="explanation" style="margin-bottom: 28px;">
+            <div class="simple-text">O selo de garantia: nada sai sem passar por 3 conferências independentes — como um tribunal com 3 juízes</div>
+            <div class="qa-grid">
+              <div class="qa-item">
+                <span class="qa-label">O que é</span>
+                <span class="qa-text">Um pipeline de três camadas de verificação sequencial. Cada camada usa um método diferente para garantir que o resultado esteja correto.</span>
+              </div>
+              <div class="qa-item">
+                <span class="qa-label">Por que existe</span>
+                <span class="qa-text">Em finanças imobiliárias, um erro de vírgula pode custar milhões. A tripla validação é o padrão ouro: se três métodos independentes concordam, o resultado é confiável.</span>
+              </div>
+            </div>
+          </div>
+          <div class="validation-pipeline">
+            <div class="validation-step">
+              <div class="check-number">1</div>
+              <div class="v-title">Matemática Determinística</div>
+              <div class="v-tech">Python Decimal Engine</div>
+              <div class="v-desc">Código Python recalcula todos os números do zero. Se Cap Rate = NOI / Valor não bater, o erro é detectado automaticamente.</div>
+            </div>
+            <div class="validation-arrow">&#10132;</div>
+            <div class="validation-step">
+              <div class="check-number">2</div>
+              <div class="v-title">Auditoria por IA</div>
+              <div class="v-tech">Specialist Prompt Audit</div>
+              <div class="v-desc">Uma segunda IA, com prompt de auditor financeiro sênior, revisa o relatório buscando inconsistências lógicas e premissas irreais.</div>
+            </div>
+            <div class="validation-arrow">&#10132;</div>
+            <div class="validation-step">
+              <div class="check-number">3</div>
+              <div class="v-title">Reconciliação Cruzada</div>
+              <div class="v-tech">Cross-Module Reconciliation</div>
+              <div class="v-desc">Verifica se os dados batem entre todos os módulos: área do terreno, VGV, custos, cronogramas. Se algo diverge, volta para correção.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 7 — OUTPUT -->
+<div class="section">
+  <div class="step-connector"><div class="connector-line"></div></div>
+  <div class="step" data-step="7">
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-number">7</div>
+        <div class="step-titles">
+          <h2>Saída</h2>
+          <span class="tech-label">Output Layer — Multi-Format Delivery (HTML / PDF / Dashboard)</span>
+        </div>
+      </div>
+      <div class="step-divider"></div>
+      <div class="step-body">
+        <div class="explanation">
+          <div class="simple-text">O resultado: relatório completo, bonito e pronto para tomar decisão</div>
+          <div class="qa-grid">
+            <div class="qa-item">
+              <span class="qa-label">O que é</span>
+              <span class="qa-text">O produto final entregue ao usuário em múltiplos formatos, com design editorial de alta qualidade (padrão Apple / Atelier Blanc).</span>
+            </div>
+            <div class="qa-item">
+              <span class="qa-label">Como funciona</span>
+              <span class="qa-text">O agente compila todos os resultados em um relatório visual (HTML/PDF), um dashboard interativo com KPIs e gráficos, e uma lista de insights acionáveis com oportunidades e riscos mapeados.</span>
+            </div>
+            <div class="qa-item">
+              <span class="qa-label">Por que existe</span>
+              <span class="qa-text">Dados sem apresentação não geram decisão. O formato importa tanto quanto o conteúdo — um valuation precisa ser claro, visual e imediatamente acionável.</span>
+            </div>
+          </div>
+        </div>
+        <div class="components cols-3">
+          <div class="component">
+            <span class="icon">&#128196;</span>
+            <div class="comp-name">Relatório</div>
+            <div class="comp-detail">Valuation completo em HTML/PDF com fontes citadas</div>
+          </div>
+          <div class="component">
+            <span class="icon">&#128202;</span>
+            <div class="comp-name">Dashboard</div>
+            <div class="comp-detail">KPIs, gráficos comparativos, benchmarks</div>
+          </div>
+          <div class="component">
+            <span class="icon">&#128161;</span>
+            <div class="comp-name">Insights</div>
+            <div class="comp-detail">Oportunidades, riscos, sugestões de ação</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DRAWING GUIDE -->
+<div class="guide-section">
+  <div class="section">
+    <h2 class="section-title">Guia para Desenho à Mão</h2>
+    <p class="section-subtitle">Dicas práticas para reproduzir este diagrama em papel, quadro branco ou iPad</p>
+    <div class="guide-grid">
+      <div class="guide-card">
+        <h3>Estrutura</h3>
+        <p>Desenhe 7 retângulos empilhados verticalmente, conectados por setas finas. O retângulo 4 (Orquestrador) deve ser o maior e preenchido de preto. Os blocos 2 e 3 podem ficar lado a lado.</p>
+      </div>
+      <div class="guide-card">
+        <h3>Tipografia</h3>
+        <p>Use dois tamanhos: grande para os títulos simples ("A Memória", "O Maestro") e pequeno para os termos técnicos (RAG, LLM, API). Técnico em MAIÚSCULA, simples em minúscula.</p>
+      </div>
+      <div class="guide-card">
+        <h3>Cores</h3>
+        <p>Apenas caneta preta e lápis cinza. Preencha o Orquestrador de preto com texto branco. Cinza claro para fundos dos componentes. Nenhuma outra cor.</p>
+      </div>
+      <div class="guide-card">
+        <h3>Elementos Periódicos</h3>
+        <p>Nos sub-agentes, desenhe pequenos quadrados com o símbolo do elemento (H, Fe, Au, C, Pb) — como na tabela periódica real. É a identidade visual dos agentes Ovall.</p>
+      </div>
+      <div class="guide-card">
+        <h3>Espaço em Branco</h3>
+        <p>Deixe bastante respiro entre os blocos. A elegância está na simplicidade. Se parecer apertado, aumente o papel ou reduza o texto. Menos é mais.</p>
+      </div>
+      <div class="guide-card">
+        <h3>Anotações Laterais</h3>
+        <p>Para cada bloco, escreva uma frase curta ao lado explicando o "por que" em linguagem simples. Use uma seta pontilhada conectando a anotação ao bloco.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SIMPLIFIED VERSION -->
+<div class="simplified-section">
+  <div class="section">
+    <h2 class="section-title">Versão Ultra-Simplificada</h2>
+    <p class="section-subtitle">Para quem quer desenhar em 2 minutos no guardanapo</p>
+    <div class="sketch-flow">
+      <div class="sketch-box" data-sketch>
+        <span class="sketch-num">1</span>
+        <div class="sketch-label">Entrada</div>
+        <div class="sketch-title">Você pede</div>
+        <div class="sketch-desc">"Quanto vale este imóvel na Av. Paulista?"</div>
+      </div>
+      <div class="sketch-arrow"><div class="line"></div></div>
+      <div class="sketch-split">
+        <div class="sketch-box" data-sketch>
+          <span class="sketch-num">2</span>
+          <div class="sketch-label">Memória</div>
+          <div class="sketch-title">O que ele já sabe</div>
+          <div class="sketch-desc">Docs, leis, transações passadas</div>
+        </div>
+        <div class="sketch-box" data-sketch>
+          <span class="sketch-num">3</span>
+          <div class="sketch-label">Internet</div>
+          <div class="sketch-title">O que ele busca agora</div>
+          <div class="sketch-desc">Selic hoje, ofertas ativas, relatórios</div>
+        </div>
+      </div>
+      <div class="sketch-arrow"><div class="line"></div></div>
+      <div class="sketch-box dark" data-sketch>
+        <span class="sketch-num">4</span>
+        <div class="sketch-label">Cérebro</div>
+        <div class="sketch-title">Pensa + Calcula + Delega</div>
+        <div class="sketch-desc">IA raciocina, código calcula sem erro, e distribui para 5 especialistas (H, Fe, Au, C, Pb)</div>
+      </div>
+      <div class="sketch-arrow"><div class="line"></div></div>
+      <div class="sketch-box emphasis" data-sketch>
+        <span class="sketch-num">5</span>
+        <div class="sketch-label">Conferência Tripla</div>
+        <div class="sketch-title">Código confere &rarr; IA audita &rarr; Cruza dados</div>
+        <div class="sketch-desc">Nada sai sem 3 aprovações independentes</div>
+      </div>
+      <div class="sketch-arrow"><div class="line"></div></div>
+      <div class="sketch-box" data-sketch>
+        <span class="sketch-num">6</span>
+        <div class="sketch-label">Resultado</div>
+        <div class="sketch-title">Relatório + Dashboard + Insights</div>
+        <div class="sketch-desc">Valuation completo, visual, com fontes e pronto para decisão</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <img src="logo.png" alt="Ovall" class="footer-logo"><br>
+  <span class="tagline">Feito pelo agente e pela gente da Ovall</span>
+</footer>
+
+<!-- JAVASCRIPT -->
+<script>
+(function() {
+  'use strict';
+
+  // Scroll Progress
+  const progressBar = document.getElementById('scrollProgress');
+  const nav = document.getElementById('stickyNav');
+  const hero = document.getElementById('hero');
+  const steps = document.querySelectorAll('.step[data-step]');
+  const navDots = document.querySelectorAll('.nav-dot');
+  const sketchBoxes = document.querySelectorAll('[data-sketch]');
+
+  // Update scroll progress
+  function updateProgress() {
+    const scrollTop = window.scrollY;
+    const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+    const progress = (scrollTop / docHeight) * 100;
+    progressBar.style.width = progress + '%';
+
+    // Show/hide nav after hero
+    if (scrollTop > hero.offsetHeight * 0.7) {
+      nav.classList.add('visible');
+    } else {
+      nav.classList.remove('visible');
+    }
+
+    // Update active dot
+    let activeStep = 1;
+    steps.forEach(step => {
+      const rect = step.getBoundingClientRect();
+      if (rect.top < window.innerHeight * 0.5) {
+        activeStep = parseInt(step.dataset.step);
+      }
+    });
+    navDots.forEach(dot => {
+      dot.classList.toggle('active', parseInt(dot.dataset.step) === activeStep);
+    });
+  }
+
+  // Intersection Observer for step animations
+  const stepObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('in-view');
+      }
+    });
+  }, {
+    threshold: 0.15,
+    rootMargin: '0px 0px -60px 0px'
+  });
+
+  steps.forEach(step => stepObserver.observe(step));
+
+  // Sketch boxes observer
+  const sketchObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('in-view');
+      }
+    });
+  }, {
+    threshold: 0.2,
+    rootMargin: '0px 0px -40px 0px'
+  });
+
+  sketchBoxes.forEach(box => sketchObserver.observe(box));
+
+  // Scroll to step
+  window.scrollToStep = function(index) {
+    const step = steps[index];
+    if (step) {
+      step.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  // Throttled scroll listener
+  let ticking = false;
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      requestAnimationFrame(() => {
+        updateProgress();
+        ticking = false;
+      });
+      ticking = true;
+    }
+  });
+
+  // Initial call
+  updateProgress();
+})();
+</script>
+
+</body>
+</html>
